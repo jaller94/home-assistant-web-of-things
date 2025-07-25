@@ -6,8 +6,8 @@ import os
 import traceback
 
 # Handle imports for both local development and CI environments
-def setup_import_path():
-    """Setup import path to work in both local and CI environments."""
+def set_up_import_path():
+    """Set up import path to work in both local and CI environments."""
     current_dir = os.path.dirname(os.path.abspath(__file__))
     component_dir = os.path.dirname(current_dir)
     
@@ -20,7 +20,7 @@ def setup_import_path():
     if parent_dir not in sys.path:
         sys.path.insert(0, parent_dir)
 
-setup_import_path()
+set_up_import_path()
 
 def import_component_module(module_name):
     """Import a component module with fallback for CI environment."""
