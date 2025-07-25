@@ -132,16 +132,54 @@ wot_http:
 - URL resolution edge cases
 
 ### Key Development Commands
+
+#### Running Tests
+The project uses pytest as the primary testing framework with multiple test types:
+
+**Recommended: pytest (Working Core Tests)**
 ```bash
-# Run tests
-python -m pytest tests/
+# From the wot_http component directory - runs all working tests
+source test_env/bin/activate && python -m pytest tests/test_basic_functionality.py tests/basic_structure_test.py tests/test_href_url_handling.py -v
+```
 
-# Run specific test file
-python -m pytest tests/test_sensor.py -v
+**All Tests (including broken integration tests)**
+```bash
+# Runs all tests, but integration tests currently fail due to async fixture issues
+source test_env/bin/activate && python -m pytest tests/ -v
+```
 
-# Run with coverage
-python -m pytest --cov=. tests/
+**Specific Test Categories:**
+```bash
+# Basic functionality tests (no Home Assistant framework needed)
+source test_env/bin/activate && python -m pytest tests/test_basic_functionality.py -v
 
+# Structure validation tests  
+source test_env/bin/activate && python -m pytest tests/basic_structure_test.py -v
+
+# URL handling tests
+source test_env/bin/activate && python -m pytest tests/test_href_url_handling.py -v
+```
+
+**Integration Tests (Currently Broken)**
+```bash
+# Note: These currently fail due to Home Assistant async fixture configuration issues
+source test_env/bin/activate && python -m pytest tests/test_init.py tests/test_sensor.py tests/test_actions.py tests/test_config_flow.py -v
+```
+
+#### Test Environment Setup
+- Tests require dependencies from `test_env/` virtual environment
+- Always activate test environment first: `source test_env/bin/activate`
+- Basic functionality and structure tests work without Home Assistant framework
+- Integration tests currently have async fixture issues and may require HA framework fixes
+
+#### Test Architecture
+- **`test_basic_functionality.py`**: Core component functionality without HA dependencies  
+- **`basic_structure_test.py`**: File structure and manifest validation
+- **`test_href_url_handling.py`**: URL resolution logic (unittest-based)
+- **Integration tests**: `test_init.py`, `test_sensor.py`, `test_actions.py`, `test_config_flow.py`
+
+#### Other Commands
+```bash
 # Type checking (if mypy available)
 mypy sensor.py actions.py
 

@@ -34,10 +34,10 @@ def test_file_structure():
     
     if missing_files:
         print(f"✗ Missing files: {missing_files}")
-        return False
+        assert False, f"Missing files: {missing_files}"
     
     print("✓ All required files exist!")
-    return True
+    assert True
 
 def test_manifest_structure():
     """Test manifest.json structure."""
@@ -55,14 +55,14 @@ def test_manifest_structure():
         for key in required_keys:
             if key not in manifest:
                 print(f"✗ Missing key in manifest: {key}")
-                return False
+                assert False, f"Missing key in manifest: {key}"
             print(f"✓ Manifest has {key}: {manifest[key]}")
         
         print("✓ Manifest structure is valid!")
-        return True
+        assert True
     except Exception as e:
         print(f"✗ Manifest test failed: {e}")
-        return False
+        assert False, f"Manifest test failed: {e}"
 
 def test_constants():
     """Test constants file."""
@@ -73,20 +73,20 @@ def test_constants():
         
         if not hasattr(const, 'DOMAIN'):
             print("✗ DOMAIN constant not found")
-            return False
+            assert False, "DOMAIN constant not found"
         
         print(f"✓ DOMAIN constant: {const.DOMAIN}")
         
         if const.DOMAIN != "wot_http":
             print(f"✗ Expected DOMAIN 'wot_http', got '{const.DOMAIN}'")
-            return False
+            assert False, f"Expected DOMAIN 'wot_http', got '{const.DOMAIN}'"
         
         print("✓ Constants are valid!")
-        return True
+        assert True
     except Exception as e:
         print(f"✗ Constants test failed: {e}")
         traceback.print_exc()
-        return False
+        assert False, f"Constants test failed: {e}"
 
 def test_strings_structure():
     """Test strings.json structure."""
@@ -102,21 +102,21 @@ def test_strings_structure():
         
         if "config" not in strings:
             print("✗ Missing 'config' section in strings.json")
-            return False
+            assert False, "Missing 'config' section in strings.json"
         
         config = strings["config"]
         required_sections = ["step", "error", "abort"]
         for section in required_sections:
             if section not in config:
                 print(f"✗ Missing '{section}' in config")
-                return False
+                assert False, f"Missing '{section}' in config"
             print(f"✓ Config has {section}")
         
         print("✓ Strings structure is valid!")
-        return True
+        assert True
     except Exception as e:
         print(f"✗ Strings test failed: {e}")
-        return False
+        assert False, f"Strings test failed: {e}"
 
 def test_code_structure():
     """Test basic code structure without importing."""
@@ -134,7 +134,7 @@ def test_code_structure():
         for func in required_functions:
             if func not in init_content:
                 print(f"✗ Missing function in __init__.py: {func}")
-                return False
+                assert False, f"Missing function in __init__.py: {func}"
             print(f"✓ Found function: {func}")
         
         # Test sensor.py has required classes
@@ -146,7 +146,7 @@ def test_code_structure():
         for cls in required_classes:
             if f"class {cls}" not in sensor_content:
                 print(f"✗ Missing class in sensor.py: {cls}")
-                return False
+                assert False, f"Missing class in sensor.py: {cls}"
             print(f"✓ Found class: {cls}")
         
         # Test actions.py has required class
@@ -156,14 +156,14 @@ def test_code_structure():
         
         if "class WoTActionHandler" not in actions_content:
             print("✗ Missing WoTActionHandler class in actions.py")
-            return False
+            assert False, "Missing WoTActionHandler class in actions.py"
         print("✓ Found class: WoTActionHandler")
         
         print("✓ Code structure is valid!")
-        return True
+        assert True
     except Exception as e:
         print(f"✗ Code structure test failed: {e}")
-        return False
+        assert False, f"Code structure test failed: {e}"
 
 def run_all_tests():
     """Run all structure tests."""
