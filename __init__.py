@@ -13,6 +13,7 @@ from homeassistant.helpers.typing import ConfigType
 
 from .actions import WoTActionHandler
 from .const import DOMAIN, CONF_BASE_URL
+from .http_utils import create_http_session
 
 _LOGGER = logging.getLogger(__name__)
 PLATFORMS = ["sensor"]
@@ -61,22 +62,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     
     thing_description = None
     try:
-        from urllib.parse import urlparse
-        parsed = urlparse(base_url)
-        
-        # Create SSL context for HTTPS if needed
-        ssl_context = None
-        if parsed.scheme == 'https':
-            import ssl
-            import functools
-            # Run SSL context creation in executor to avoid blocking the event loop
-            ssl_context = await hass.async_add_executor_job(
-                functools.partial(ssl.create_default_context)
-            )
-        
-        connector = aiohttp.TCPConnector(ssl=ssl_context) if parsed.scheme == 'https' else None
-        
-        async with aiohttp.ClientSession(connector=connector) as session:
+        async with create_http_session(hass, base_url) as session:
             td_url = f"{base_url.rstrip('/')}/.well-known/wot"
             async with session.get(td_url, timeout=aiohttp.ClientTimeout(total=10)) as response:
                 if response.status == 200:

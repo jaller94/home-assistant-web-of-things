@@ -2,11 +2,12 @@
 import logging
 from typing import Any, Dict
 
-import aiohttp
 import async_timeout
 
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import HomeAssistantError
+
+from .http_utils import create_http_session
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -111,22 +112,7 @@ class WoTActionHandler:
                 request_data = call_data
 
         try:
-            from urllib.parse import urlparse
-            parsed = urlparse(base_url)
-            
-            # Create SSL context for HTTPS if needed
-            ssl_context = None
-            if parsed.scheme == 'https':
-                import ssl
-                import functools
-                # Run SSL context creation in executor to avoid blocking the event loop
-                ssl_context = await self.hass.async_add_executor_job(
-                    functools.partial(ssl.create_default_context)
-                )
-            
-            connector = aiohttp.TCPConnector(ssl=ssl_context) if parsed.scheme == 'https' else None
-            
-            async with aiohttp.ClientSession(connector=connector) as session:
+            async with create_http_session(self.hass, base_url) as session:
                 async with async_timeout.timeout(30):
                     if http_method == "GET":
                         async with session.get(action_url) as response:

@@ -13,6 +13,7 @@ from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
 
 from .const import DOMAIN, CONF_BASE_URL
+from .http_utils import create_http_session
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -53,22 +54,7 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
         data[CONF_BASE_URL] = base_url
     
     try:
-        # Create SSL context for HTTPS if needed
-        ssl_context = None
-        if parsed.scheme == 'https':
-            import ssl
-            import functools
-            # Run SSL context creation in executor to avoid blocking the event loop
-            ssl_context = await hass.async_add_executor_job(
-                functools.partial(ssl.create_default_context)
-            )
-            # For development/testing, you might want to disable SSL verification
-            # ssl_context.check_hostname = False
-            # ssl_context.verify_mode = ssl.CERT_NONE
-        
-        connector = aiohttp.TCPConnector(ssl=ssl_context) if parsed.scheme == 'https' else None
-        
-        async with aiohttp.ClientSession(connector=connector) as session:
+        async with create_http_session(hass, base_url) as session:
             # Try root endpoint first
             try:
                 async with session.get(base_url, timeout=aiohttp.ClientTimeout(total=10)) as response:

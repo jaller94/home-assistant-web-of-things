@@ -3,14 +3,12 @@ import logging
 from datetime import timedelta
 from typing import Any
 
-import aiohttp
 import async_timeout
 
 from homeassistant.components.sensor import SensorEntity, SensorStateClass
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import (
@@ -20,6 +18,7 @@ from homeassistant.helpers.update_coordinator import (
 )
 
 from .const import DOMAIN, CONF_BASE_URL
+from .http_utils import create_http_session, is_thing_description, get_property_url, parse_property_value, convert_text_to_number
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -207,17 +206,7 @@ class WoTDataUpdateCoordinator(DataUpdateCoordinator):
                                             prop_data = await response.json()
                                             _LOGGER.debug("Property '%s' raw data: %s", prop_name, prop_data)
                                             
-                                            # Handle different response formats
-                                            if isinstance(prop_data, dict) and "value" in prop_data:
-                                                # WoT standard format: {"value": actual_value}
-                                                value = prop_data["value"]
-                                            elif isinstance(prop_data, dict) and len(prop_data) == 1:
-                                                # Single key-value pair
-                                                value = list(prop_data.values())[0]
-                                            else:
-                                                # Direct value or complex object
-                                                value = prop_data
-                                            
+                                            value = parse_property_value(prop_data)
                                             data[prop_name] = value
                                             _LOGGER.debug("Property '%s' processed value: %s", prop_name, value)
                                             
@@ -226,11 +215,7 @@ class WoTDataUpdateCoordinator(DataUpdateCoordinator):
                                             try:
                                                 text_data = await response.text()
                                                 _LOGGER.debug("Property '%s' text data: %s", prop_name, text_data)
-                                                # Try to parse as number if possible
-                                                try:
-                                                    data[prop_name] = float(text_data) if '.' in text_data else int(text_data)
-                                                except ValueError:
-                                                    data[prop_name] = text_data
+                                                data[prop_name] = convert_text_to_number(text_data)
                                             except Exception:
                                                 _LOGGER.warning("Failed to parse property '%s' as JSON or text: %s", prop_name, json_err)
                                     else:
@@ -262,7 +247,7 @@ class WoTDataUpdateCoordinator(DataUpdateCoordinator):
                                             _LOGGER.debug("Fallback endpoint '%s' data: %s", endpoint, endpoint_data)
                                             
                                             # If this looks like a Thing Description, try to use it
-                                            if endpoint == "/" and self._is_thing_description(endpoint_data):
+                                            if endpoint == "/" and is_thing_description(endpoint_data):
                                                 _LOGGER.debug("Found Thing Description at root endpoint")
                                                 self.thing_description = endpoint_data
                                                 # Restart the process with the Thing Description
@@ -357,35 +342,22 @@ class WoTSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def device_class(self) -> str | None:
-        """Return device class based on data type and unit."""
-        if self._data_type in ("number", "integer") and self._unit:
-            # Use unit of measurement to determine device class when available
-            unit_lower = self._unit.lower()
+        """Return device class based on WoT metadata only - never assume from names."""
+        if self._data_type not in ("number", "integer") or not self._unit:
+            return None
             
-            # Temperature units
-            if unit_lower in ("°c", "°f", "celsius", "fahrenheit", "k", "kelvin"):
-                return "temperature"
-            # Humidity units
-            elif unit_lower in ("%", "percent", "rh"):
-                return "humidity"
-            # Pressure units
-            elif unit_lower in ("pa", "hpa", "kpa", "mbar", "bar", "mmhg", "inhg", "psi"):
-                return "pressure"
-            # Power/Energy units
-            elif unit_lower in ("w", "watt", "kw", "kilowatt", "kwh", "wh"):
-                return "power"
-            # Battery units
-            elif unit_lower in ("%", "v", "volt", "volts") and "battery" in self._property_key.lower():
-                return "battery"
-                
-        # Fallback to property name hints only for very common cases
-        if self._data_type in ("number", "integer") and not self._unit:
-            if "temperature" in self._property_key.lower() or "temp" in self._property_key.lower():
-                return "temperature"
-            elif "humidity" in self._property_key.lower():
-                return "humidity"
-            elif "pressure" in self._property_key.lower():
-                return "pressure"
+        # Only use explicit unit information from Thing Description
+        unit_lower = self._unit.lower()
+        unit_mapping = {
+            "temperature": ("°c", "°f", "celsius", "fahrenheit", "k", "kelvin"),
+            "humidity": ("%", "percent", "rh"),
+            "pressure": ("pa", "hpa", "kpa", "mbar", "bar", "mmhg", "inhg", "psi"),
+            "power": ("w", "watt", "kw", "kilowatt", "kwh", "wh"),
+        }
+        
+        for device_class, units in unit_mapping.items():
+            if unit_lower in units:
+                return device_class
                 
         return None
 
