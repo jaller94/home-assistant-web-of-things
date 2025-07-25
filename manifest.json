@@ -1,0 +1,10 @@
+{
+  "domain": "wot_http",
+  "name": "Web of Things HTTP",
+  "config_flow": true,
+  "codeowners": [],
+  "dependencies": [],
+  "documentation": "https://www.w3.org/WoT/",
+  "requirements": ["aiohttp"],
+  "version": "1.0.0"
+}
