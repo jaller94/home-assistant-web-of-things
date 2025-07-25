@@ -2,6 +2,7 @@
 import logging
 from typing import Any, Dict
 
+import aiohttp
 import async_timeout
 
 from homeassistant.core import HomeAssistant, ServiceCall
