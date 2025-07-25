@@ -170,14 +170,15 @@ class WoTDataUpdateCoordinator(DataUpdateCoordinator):
     async def _async_update_data(self) -> dict[str, Any]:
         """Update data via library."""
         try:
-            async with create_http_session(
+            session = await create_http_session(
                 self.hass, 
                 self.base_url, 
                 self.auth_type, 
                 self.username, 
                 self.password, 
                 self.token
-            ) as session:
+            )
+            async with session:
                 # First, try to get Thing Description if we don't have it
                 if self.thing_description is None:
                     # Try standard WoT Thing Description endpoints

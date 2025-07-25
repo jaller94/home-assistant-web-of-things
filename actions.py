@@ -133,14 +133,15 @@ class WoTActionHandler:
                 request_data = call_data
 
         try:
-            async with create_http_session(
+            session = await create_http_session(
                 self.hass, 
                 base_url, 
                 device.get("auth_type"),
                 device.get("username"),
                 device.get("password"),
                 device.get("token")
-            ) as session:
+            )
+            async with session:
                 async with async_timeout.timeout(30):
                     if http_method == "GET":
                         async with session.get(action_url) as response:

@@ -76,7 +76,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     
     thing_description = None
     try:
-        async with create_http_session(hass, base_url, auth_type, username, password, token) as session:
+        session = await create_http_session(hass, base_url, auth_type, username, password, token)
+        async with session:
             td_url = f"{base_url.rstrip('/')}/.well-known/wot"
             async with session.get(td_url, timeout=aiohttp.ClientTimeout(total=10)) as response:
                 if response.status == 200:

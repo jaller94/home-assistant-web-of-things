@@ -80,9 +80,10 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
         password = data.get(CONF_PASSWORD)
         token = data.get(CONF_TOKEN)
         
-        async with create_http_session(
+        session = await create_http_session(
             hass, base_url, auth_type, username, password, token
-        ) as session:
+        )
+        async with session:
             # Try root endpoint first
             try:
                 async with session.get(base_url, timeout=aiohttp.ClientTimeout(total=10)) as response:
