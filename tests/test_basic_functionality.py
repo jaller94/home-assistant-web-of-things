@@ -6,10 +6,32 @@ import os
 import asyncio
 from unittest.mock import MagicMock, AsyncMock, patch
 
-# Add the parent directory to the path to find custom_components.wot_http
-parent_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '..')
-if parent_dir not in sys.path:
-    sys.path.insert(0, parent_dir)
+# Handle imports for both local development and CI environments
+def setup_import_path():
+    """Setup import path to work in both local and CI environments."""
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    component_dir = os.path.dirname(current_dir)
+    
+    # For CI: add the component directory directly to path
+    if component_dir not in sys.path:
+        sys.path.insert(0, component_dir)
+    
+    # For local development: add parent directory for custom_components.wot_http
+    parent_dir = os.path.join(component_dir, '..')
+    if parent_dir not in sys.path:
+        sys.path.insert(0, parent_dir)
+
+setup_import_path()
+
+
+def import_component_module(module_name):
+    """Import a component module with fallback for CI environment."""
+    try:
+        # Try local development import first
+        return __import__(f'custom_components.wot_http.{module_name}', fromlist=[module_name])
+    except ImportError:
+        # Fallback for CI environment
+        return __import__(module_name)
 
 
 def create_mock_hass():
@@ -75,17 +97,15 @@ def create_sample_thing_description():
 def test_basic_imports():
     """Test basic imports work."""
     try:
-        from custom_components.wot_http import const
+        const = import_component_module('const')
+        actions = import_component_module('actions')
+        sensor = import_component_module('sensor')
+        config_flow = import_component_module('config_flow')
+        
         assert hasattr(const, 'DOMAIN')
-        
-        from custom_components.wot_http import actions
         assert hasattr(actions, 'WoTActionHandler')
-        
-        from custom_components.wot_http import sensor
         assert hasattr(sensor, 'WoTDataUpdateCoordinator')
         assert hasattr(sensor, 'WoTSensor')
-        
-        from custom_components.wot_http import config_flow
         assert hasattr(config_flow, 'CannotConnect')
         assert hasattr(config_flow, 'InvalidAuth')
         assert hasattr(config_flow, 'ConfigFlow')
@@ -99,10 +119,10 @@ def test_basic_imports():
 @pytest.mark.asyncio
 async def test_action_handler_basic():
     """Test basic WoTActionHandler functionality."""
-    from custom_components.wot_http.actions import WoTActionHandler
+    actions = import_component_module('actions')
         
     hass = create_mock_hass()
-    handler = WoTActionHandler(hass)
+    handler = actions.WoTActionHandler(hass)
     
     # Test device registration
     entry_id = "test_entry"
@@ -123,11 +143,11 @@ async def test_action_handler_basic():
 @pytest.mark.asyncio
 async def test_sensor_coordinator():
     """Test basic WoTDataUpdateCoordinator functionality."""
-    from custom_components.wot_http.sensor import WoTDataUpdateCoordinator
+    sensor = import_component_module('sensor')
     
     hass = create_mock_hass()
     base_url = "http://192.168.1.100:8080"
-    coordinator = WoTDataUpdateCoordinator(hass, base_url)
+    coordinator = sensor.WoTDataUpdateCoordinator(hass, base_url)
     
     assert coordinator.base_url == "http://192.168.1.100:8080"
 
@@ -135,15 +155,15 @@ async def test_sensor_coordinator():
 @pytest.mark.asyncio
 async def test_wot_sensor():
     """Test basic WoTSensor functionality."""
-    from custom_components.wot_http.sensor import WoTDataUpdateCoordinator, WoTSensor
+    sensor = import_component_module('sensor')
     
     hass = create_mock_hass()
     base_url = "http://192.168.1.100:8080"
-    coordinator = WoTDataUpdateCoordinator(hass, base_url)
+    coordinator = sensor.WoTDataUpdateCoordinator(hass, base_url)
     coordinator.data = {"temperature": 22.5}
     coordinator.last_update_success = True
     
-    wot_sensor = WoTSensor(
+    wot_sensor = sensor.WoTSensor(
         coordinator=coordinator,
         name="Test Temperature",
         property_key="temperature",
@@ -159,7 +179,7 @@ async def test_wot_sensor():
 
 def test_config_flow_basic():
     """Test basic config flow functionality."""
-    from custom_components.wot_http import config_flow
+    config_flow = import_component_module('config_flow')
     
     # Test exception classes exist
     assert hasattr(config_flow, 'CannotConnect')
@@ -169,9 +189,9 @@ def test_config_flow_basic():
 
 def test_constants():
     """Test constants are defined."""
-    from custom_components.wot_http.const import DOMAIN
+    const = import_component_module('const')
     
-    assert DOMAIN == "wot_http"
+    assert const.DOMAIN == "wot_http"
 
 
 def test_url_handling():

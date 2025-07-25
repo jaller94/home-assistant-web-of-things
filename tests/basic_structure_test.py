@@ -5,8 +5,31 @@ import sys
 import os
 import traceback
 
-# Add parent directory to path for imports
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Handle imports for both local development and CI environments
+def setup_import_path():
+    """Setup import path to work in both local and CI environments."""
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    component_dir = os.path.dirname(current_dir)
+    
+    # For CI: add the component directory directly to path
+    if component_dir not in sys.path:
+        sys.path.insert(0, component_dir)
+    
+    # For local development: add parent directory for custom_components.wot_http
+    parent_dir = os.path.join(component_dir, '..')
+    if parent_dir not in sys.path:
+        sys.path.insert(0, parent_dir)
+
+setup_import_path()
+
+def import_component_module(module_name):
+    """Import a component module with fallback for CI environment."""
+    try:
+        # Try local development import first
+        return __import__(f'custom_components.wot_http.{module_name}', fromlist=[module_name])
+    except ImportError:
+        # Fallback for CI environment
+        return __import__(module_name)
 
 def test_file_structure():
     """Test that all required files exist."""
@@ -69,7 +92,7 @@ def test_constants():
     print("\nTesting constants...")
     
     try:
-        import const
+        const = import_component_module('const')
         
         if not hasattr(const, 'DOMAIN'):
             print("✗ DOMAIN constant not found")
