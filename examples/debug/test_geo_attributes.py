@@ -1,16 +1,19 @@
 #!/usr/bin/env python3
-"""Test geo attributes extraction from WoT sensor."""
+"""Debug script: Test geo attributes extraction from WoT sensor using optimized utilities."""
 
 import sys
 import os
 
-# Add parent directory to path for imports
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Add parent directories to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 def test_geo_attributes():
     """Test that geo attributes are correctly extracted."""
     print("Testing geo attributes extraction...")
     print("=" * 50)
+    
+    # Import our optimized utilities
+    from http_utils import is_thing_description
     
     # Mock Thing Description with geo info (like YouBikes)
     mock_thing_description = {
@@ -40,6 +43,14 @@ def test_geo_attributes():
             self.thing_description = mock_thing_description
             self.data = {"available_spaces": 25}
             self.last_update_success = True
+    
+    # First, validate this is a proper Thing Description using our optimized utility
+    print(f"🔍 Validating Thing Description...")
+    if is_thing_description(mock_thing_description):
+        print("✅ Valid WoT Thing Description detected")
+    else:
+        print("❌ Invalid Thing Description format")
+        return False
     
     # Test the geo extraction logic directly
     try:

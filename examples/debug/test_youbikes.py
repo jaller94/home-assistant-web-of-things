@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Test the WoTDataUpdateCoordinator with the YouBikes server."""
+"""Debug script: Test WoTDataUpdateCoordinator with YouBikes server using optimized utilities."""
 
 import asyncio
 import sys
 import os
 
-# Add parent directory to path for imports
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Add parent directories to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 async def test_youbikes_coordinator():
     """Test WoTDataUpdateCoordinator with YouBikes device."""
@@ -36,58 +36,14 @@ async def test_youbikes_coordinator():
                 self.data = None
                 self.last_update_success = True
         
+        # Import our optimized utilities
+        from http_utils import (
+            create_http_session, is_thing_description, get_property_url, 
+            parse_property_value, convert_text_to_number
+        )
+        
         class WoTDataUpdateCoordinator(MockDataUpdateCoordinator):
-            """Standalone version for testing."""
-            
-            def _is_thing_description(self, data: dict) -> bool:
-                """Check if JSON data looks like a WoT Thing Description."""
-                if not isinstance(data, dict):
-                    return False
-                
-                # Check for WoT TD indicators
-                has_context = "@context" in data
-                has_properties = "properties" in data and isinstance(data["properties"], dict)
-                has_title = "title" in data
-                has_type_thing = data.get("@type") == "Thing" or "Thing" in str(data.get("@type", ""))
-                
-                # Must have either @context or properties to be considered a TD
-                return (has_context or has_properties) and (has_title or has_type_thing or has_properties)
-
-            def _get_property_url(self, prop_name: str, prop_info: dict) -> str:
-                """Get the property URL from WoT 1.0 or 1.1 format."""
-                
-                # WoT 1.0 format - simple href
-                if "href" in prop_info:
-                    href = prop_info['href']
-                    return self._resolve_url(href)
-                
-                # WoT 1.1 format - forms array
-                if "forms" in prop_info and isinstance(prop_info["forms"], list):
-                    for form in prop_info["forms"]:
-                        if isinstance(form, dict) and "href" in form:
-                            # Look for HTTP-based forms (not WebSocket)
-                            href = form["href"]
-                            if not href.lower().startswith(('ws://', 'wss://')):
-                                # Check if this form supports readproperty operation
-                                ops = form.get("op", [])
-                                if "readproperty" in ops or not ops:  # If no ops specified, assume it supports read
-                                    return self._resolve_url(href)
-                
-                # Fallback to default WoT endpoint
-                return f"{self.base_url}/properties/{prop_name}"
-
-            def _resolve_url(self, href: str) -> str:
-                """Resolve href to absolute URL."""
-                # Handle absolute URLs, relative paths, and relative URLs properly
-                if href.lower().startswith(('http://', 'https://')):
-                    # Absolute URL - use as-is
-                    return href
-                elif href.startswith('/'):
-                    # Relative path from root - append to base URL
-                    return f"{self.base_url}{href}"
-                else:
-                    # Relative URL - append to base URL with separator
-                    return f"{self.base_url}/{href}"
+            """Test version using optimized utilities."""
 
             async def _async_update_data(self):
                 """Update data via library."""
@@ -95,19 +51,8 @@ async def test_youbikes_coordinator():
                     from urllib.parse import urlparse
                     parsed = urlparse(self.base_url)
                     
-                    # Create SSL context for HTTPS if needed
-                    ssl_context = None
-                    if parsed.scheme == 'https':
-                        import ssl
-                        import functools
-                        # Run SSL context creation in executor to avoid blocking the event loop
-                        ssl_context = await self.hass.async_add_executor_job(
-                            functools.partial(ssl.create_default_context)
-                        )
-                    
-                    connector = aiohttp.TCPConnector(ssl=ssl_context) if parsed.scheme == 'https' else None
-                    
-                    async with aiohttp.ClientSession(connector=connector) as session:
+                    session = await create_http_session(self.hass, self.base_url)
+                    async with session:
                         # First, try to get Thing Description if we don't have it
                         if self.thing_description is None:
                             # Try standard WoT Thing Description endpoints
@@ -123,7 +68,7 @@ async def test_youbikes_coordinator():
                                             if response.status == 200:
                                                 data = await response.json()
                                                 # Check if this looks like a Thing Description
-                                                if self._is_thing_description(data):
+                                                if is_thing_description(data):
                                                     self.thing_description = data
                                                     _LOGGER.debug("Found Thing Description at %s", td_url)
                                                     break
@@ -140,7 +85,7 @@ async def test_youbikes_coordinator():
                             
                             for prop_name, prop_info in properties.items():
                                 # Construct property URL - handle both WoT 1.0 and 1.1 formats
-                                prop_url = self._get_property_url(prop_name, prop_info)
+                                prop_url = get_property_url(self.base_url, prop_name, prop_info)
                                 
                                 _LOGGER.debug("Fetching property '%s' from URL: %s", prop_name, prop_url)
                                 
@@ -154,17 +99,7 @@ async def test_youbikes_coordinator():
                                                     prop_data = await response.json()
                                                     _LOGGER.debug("Property '%s' raw data: %s", prop_name, prop_data)
                                                     
-                                                    # Handle different response formats
-                                                    if isinstance(prop_data, dict) and "value" in prop_data:
-                                                        # WoT standard format: {"value": actual_value}
-                                                        value = prop_data["value"]
-                                                    elif isinstance(prop_data, dict) and len(prop_data) == 1:
-                                                        # Single key-value pair
-                                                        value = list(prop_data.values())[0]
-                                                    else:
-                                                        # Direct value or complex object
-                                                        value = prop_data
-                                                    
+                                                    value = parse_property_value(prop_data)
                                                     data[prop_name] = value
                                                     _LOGGER.debug("Property '%s' processed value: %s", prop_name, value)
                                                     
@@ -173,11 +108,7 @@ async def test_youbikes_coordinator():
                                                     try:
                                                         text_data = await response.text()
                                                         _LOGGER.debug("Property '%s' text data: %s", prop_name, text_data)
-                                                        # Try to parse as number if possible
-                                                        try:
-                                                            data[prop_name] = float(text_data) if '.' in text_data else int(text_data)
-                                                        except ValueError:
-                                                            data[prop_name] = text_data
+                                                        data[prop_name] = convert_text_to_number(text_data)
                                                     except Exception:
                                                         _LOGGER.warning("Failed to parse property '%s' as JSON or text: %s", prop_name, json_err)
                                             else:
@@ -257,7 +188,7 @@ async def test_youbikes_coordinator():
                     print(f"    - No href or forms")
                     
                 # Show the URL that would be constructed
-                constructed_url = coordinator._get_property_url(prop_name, prop_info) 
+                constructed_url = get_property_url(coordinator.base_url, prop_name, prop_info)
                 print(f"    - Constructed URL: {constructed_url}")
         else:
             print("❌ No Thing Description found")

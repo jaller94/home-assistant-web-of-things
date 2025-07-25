@@ -107,6 +107,8 @@ known_devices.yaml
 debug_*.py
 test_local_*.py
 scratch_*.py
+temp_test_*.py
+manual_test_*.py
 
 # Documentation build
 docs/_build/
