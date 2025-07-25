@@ -48,12 +48,14 @@ def sample_thing_description():
         "title": "Test Device",
         "properties": {
             "temperature": {
+                "title": "Room Temperature",
                 "type": "number",
                 "unit": "celsius",
                 "readOnly": True,
                 "href": "/properties/temperature"
             },
             "brightness": {
+                "title": "Brightness Level",
                 "type": "number",
                 "minimum": 0,
                 "maximum": 100,

@@ -58,10 +58,12 @@ async def async_setup_entry(
         # Use Thing Description to create sensors
         properties = coordinator.thing_description["properties"]
         for prop_name, prop_data in properties.items():
+            # Use property title if available, otherwise use property name
+            prop_title = prop_data.get("title", prop_name)
             sensors.append(
                 WoTSensor(
                     coordinator,
-                    f"{name}_{prop_name}",
+                    prop_title,
                     prop_name,
                     prop_data.get("type", "string"),
                     prop_data.get("unit"),
@@ -70,10 +72,12 @@ async def async_setup_entry(
     elif coordinator.data and "properties" in coordinator.data:
         # Fallback: use properties found in data
         for prop_name, prop_data in coordinator.data["properties"].items():
+            # Use property title if available, otherwise use property name
+            prop_title = prop_data.get("title", prop_name)
             sensors.append(
                 WoTSensor(
                     coordinator,
-                    f"{name}_{prop_name}",
+                    prop_title,
                     prop_name,
                     prop_data.get("type", "string"),
                     prop_data.get("unit"),
