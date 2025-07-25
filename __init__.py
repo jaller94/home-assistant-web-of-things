@@ -12,7 +12,15 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.typing import ConfigType
 
 from .actions import WoTActionHandler
-from .const import DOMAIN, CONF_BASE_URL
+from .const import (
+    DOMAIN, 
+    CONF_BASE_URL, 
+    CONF_AUTH_TYPE, 
+    CONF_USERNAME, 
+    CONF_PASSWORD, 
+    CONF_TOKEN,
+    AUTH_NONE
+)
 from .http_utils import create_http_session
 
 _LOGGER = logging.getLogger(__name__)
@@ -60,9 +68,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if not base_url.endswith('/'):
         base_url = base_url + '/'
     
+    # Extract authentication parameters
+    auth_type = entry.data.get(CONF_AUTH_TYPE, AUTH_NONE)
+    username = entry.data.get(CONF_USERNAME)
+    password = entry.data.get(CONF_PASSWORD)
+    token = entry.data.get(CONF_TOKEN)
+    
     thing_description = None
     try:
-        async with create_http_session(hass, base_url) as session:
+        async with create_http_session(hass, base_url, auth_type, username, password, token) as session:
             td_url = f"{base_url.rstrip('/')}/.well-known/wot"
             async with session.get(td_url, timeout=aiohttp.ClientTimeout(total=10)) as response:
                 if response.status == 200:
@@ -72,7 +86,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Register device actions
     action_handler = hass.data[DOMAIN]["action_handler"]
-    action_handler.register_device(entry.entry_id, base_url, thing_description)
+    action_handler.register_device(entry.entry_id, base_url, thing_description, auth_type, username, password, token)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True

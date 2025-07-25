@@ -1,18 +1,28 @@
 """HTTP utilities for WoT HTTP integration."""
 import ssl
 import functools
-from typing import Any
+import base64
+from typing import Any, Optional
 from urllib.parse import urlparse
 
 import aiohttp
 
 from homeassistant.core import HomeAssistant
+from .const import AUTH_BASIC, AUTH_BEARER
 
 
-async def create_http_session(hass: HomeAssistant, base_url: str) -> aiohttp.ClientSession:
-    """Create HTTP session with appropriate SSL context."""
+async def create_http_session(
+    hass: HomeAssistant, 
+    base_url: str, 
+    auth_type: Optional[str] = None,
+    username: Optional[str] = None,
+    password: Optional[str] = None,
+    token: Optional[str] = None
+) -> aiohttp.ClientSession:
+    """Create HTTP session with appropriate SSL context and authentication."""
     parsed = urlparse(base_url)
     
+    # SSL configuration
     if parsed.scheme == 'https':
         ssl_context = await hass.async_add_executor_job(
             functools.partial(ssl.create_default_context)
@@ -21,7 +31,18 @@ async def create_http_session(hass: HomeAssistant, base_url: str) -> aiohttp.Cli
     else:
         connector = None
     
-    return aiohttp.ClientSession(connector=connector)
+    # Authentication headers
+    headers = {}
+    if auth_type == AUTH_BASIC and username and password:
+        # HTTP Basic Authentication
+        credentials = f"{username}:{password}"
+        encoded_credentials = base64.b64encode(credentials.encode()).decode()
+        headers["Authorization"] = f"Basic {encoded_credentials}"
+    elif auth_type == AUTH_BEARER and token:
+        # Bearer Token Authentication
+        headers["Authorization"] = f"Bearer {token}"
+    
+    return aiohttp.ClientSession(connector=connector, headers=headers)
 
 
 def resolve_url(base_url: str, href: str) -> str:

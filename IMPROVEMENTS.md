@@ -29,12 +29,6 @@
 - `button.py` - for WoT actions without parameters
 - `number.py` - for numeric controls
 
-### SSL/HTTPS Support
-- Add HTTPS URL support
-- Certificate validation options
-- Self-signed certificate handling
-- TLS configuration options
-
 ### Device Registry Integration
 - Register devices with proper identifiers
 - Device info from Thing Description

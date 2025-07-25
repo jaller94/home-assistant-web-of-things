@@ -17,7 +17,15 @@ from homeassistant.helpers.update_coordinator import (
     UpdateFailed,
 )
 
-from .const import DOMAIN, CONF_BASE_URL
+from .const import (
+    DOMAIN, 
+    CONF_BASE_URL, 
+    CONF_AUTH_TYPE, 
+    CONF_USERNAME, 
+    CONF_PASSWORD, 
+    CONF_TOKEN,
+    AUTH_NONE
+)
 from .http_utils import create_http_session, is_thing_description, get_property_url, parse_property_value, convert_text_to_number
 
 _LOGGER = logging.getLogger(__name__)
@@ -33,8 +41,14 @@ async def async_setup_entry(
     """Set up WoT HTTP sensor based on a config entry."""
     base_url = config_entry.data[CONF_BASE_URL]
     name = config_entry.data[CONF_NAME]
+    
+    # Extract authentication parameters
+    auth_type = config_entry.data.get(CONF_AUTH_TYPE, AUTH_NONE)
+    username = config_entry.data.get(CONF_USERNAME)
+    password = config_entry.data.get(CONF_PASSWORD)
+    token = config_entry.data.get(CONF_TOKEN)
 
-    coordinator = WoTDataUpdateCoordinator(hass, base_url)
+    coordinator = WoTDataUpdateCoordinator(hass, base_url, auth_type, username, password, token)
     await coordinator.async_config_entry_first_refresh()
 
     sensors = []
@@ -77,11 +91,23 @@ async def async_setup_entry(
 class WoTDataUpdateCoordinator(DataUpdateCoordinator):
     """Class to manage fetching WoT data from the API."""
 
-    def __init__(self, hass: HomeAssistant, base_url: str) -> None:
+    def __init__(
+        self, 
+        hass: HomeAssistant, 
+        base_url: str,
+        auth_type: str = AUTH_NONE,
+        username: str = None,
+        password: str = None,
+        token: str = None
+    ) -> None:
         """Initialize."""
         if not base_url.endswith('/'):
             base_url = base_url + '/'
         self.base_url = base_url.rstrip('/')
+        self.auth_type = auth_type
+        self.username = username
+        self.password = password
+        self.token = token
         self.thing_description = None
 
         super().__init__(
@@ -144,22 +170,14 @@ class WoTDataUpdateCoordinator(DataUpdateCoordinator):
     async def _async_update_data(self) -> dict[str, Any]:
         """Update data via library."""
         try:
-            from urllib.parse import urlparse
-            parsed = urlparse(self.base_url)
-            
-            # Create SSL context for HTTPS if needed
-            ssl_context = None
-            if parsed.scheme == 'https':
-                import ssl
-                import functools
-                # Run SSL context creation in executor to avoid blocking the event loop
-                ssl_context = await self.hass.async_add_executor_job(
-                    functools.partial(ssl.create_default_context)
-                )
-            
-            connector = aiohttp.TCPConnector(ssl=ssl_context) if parsed.scheme == 'https' else None
-            
-            async with aiohttp.ClientSession(connector=connector) as session:
+            async with create_http_session(
+                self.hass, 
+                self.base_url, 
+                self.auth_type, 
+                self.username, 
+                self.password, 
+                self.token
+            ) as session:
                 # First, try to get Thing Description if we don't have it
                 if self.thing_description is None:
                     # Try standard WoT Thing Description endpoints

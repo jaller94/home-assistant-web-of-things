@@ -12,7 +12,18 @@ from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
 
-from .const import DOMAIN, CONF_BASE_URL
+from .const import (
+    DOMAIN, 
+    CONF_BASE_URL, 
+    CONF_AUTH_TYPE, 
+    CONF_USERNAME, 
+    CONF_PASSWORD, 
+    CONF_TOKEN,
+    AUTH_NONE,
+    AUTH_BASIC,
+    AUTH_BEARER,
+    AUTH_TYPES
+)
 from .http_utils import create_http_session
 
 _LOGGER = logging.getLogger(__name__)
@@ -21,6 +32,15 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_BASE_URL): str,
         vol.Optional(CONF_NAME, default="WoT Device"): str,
+        vol.Optional(CONF_AUTH_TYPE, default=AUTH_NONE): vol.In(AUTH_TYPES),
+    }
+)
+
+STEP_AUTH_DATA_SCHEMA = vol.Schema(
+    {
+        vol.Optional(CONF_USERNAME): str,
+        vol.Optional(CONF_PASSWORD): str,
+        vol.Optional(CONF_TOKEN): str,
     }
 )
 
@@ -54,7 +74,15 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
         data[CONF_BASE_URL] = base_url
     
     try:
-        async with create_http_session(hass, base_url) as session:
+        # Extract authentication parameters
+        auth_type = data.get(CONF_AUTH_TYPE, AUTH_NONE)
+        username = data.get(CONF_USERNAME)
+        password = data.get(CONF_PASSWORD)
+        token = data.get(CONF_TOKEN)
+        
+        async with create_http_session(
+            hass, base_url, auth_type, username, password, token
+        ) as session:
             # Try root endpoint first
             try:
                 async with session.get(base_url, timeout=aiohttp.ClientTimeout(total=10)) as response:
@@ -125,6 +153,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
+    def __init__(self):
+        """Initialize config flow."""
+        self._base_config = {}
+
     @staticmethod
     def async_get_options_flow(config_entry):
         """Get the options flow for this handler."""
@@ -136,13 +168,53 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Handle the initial step."""
         errors: dict[str, str] = {}
         if user_input is not None:
+            # Store base configuration
+            self._base_config = user_input.copy()
+            
             # Check if already configured
             unique_id = user_input[CONF_BASE_URL].rstrip('/')
             await self.async_set_unique_id(unique_id)
             self._abort_if_unique_id_configured()
             
+            # If no auth required, validate directly
+            if user_input.get(CONF_AUTH_TYPE, AUTH_NONE) == AUTH_NONE:
+                try:
+                    info = await validate_input(self.hass, user_input)
+                    return self.async_create_entry(title=info["title"], data=user_input)
+                except CannotConnect as e:
+                    errors["base"] = "cannot_connect"
+                    _LOGGER.warning("Cannot connect to WoT device: %s", str(e))
+                except InvalidInput as e:
+                    errors["base"] = "invalid_input"
+                    _LOGGER.warning("Invalid input: %s", str(e))
+                except InvalidAuth:
+                    errors["base"] = "invalid_auth"
+                except Exception:  # pylint: disable=broad-except
+                    _LOGGER.exception("Unexpected exception")
+                    errors["base"] = "unknown"
+            else:
+                # Proceed to authentication step
+                return await self.async_step_auth()
+
+        return self.async_show_form(
+            step_id="user", data_schema=STEP_USER_DATA_SCHEMA, errors=errors
+        )
+
+    async def async_step_auth(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Handle authentication step."""
+        errors: dict[str, str] = {}
+        auth_type = self._base_config.get(CONF_AUTH_TYPE, AUTH_NONE)
+        
+        if user_input is not None:
+            # Merge auth data with base config
+            final_data = {**self._base_config, **user_input}
+            
+            # Validate credentials
             try:
-                info = await validate_input(self.hass, user_input)
+                info = await validate_input(self.hass, final_data)
+                return self.async_create_entry(title=info["title"], data=final_data)
             except CannotConnect as e:
                 errors["base"] = "cannot_connect"
                 _LOGGER.warning("Cannot connect to WoT device: %s", str(e))
@@ -154,11 +226,29 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             except Exception:  # pylint: disable=broad-except
                 _LOGGER.exception("Unexpected exception")
                 errors["base"] = "unknown"
-            else:
-                return self.async_create_entry(title=info["title"], data=user_input)
+        
+        # Build appropriate schema based on auth type
+        if auth_type == AUTH_BASIC:
+            auth_schema = vol.Schema({
+                vol.Required(CONF_USERNAME): str,
+                vol.Required(CONF_PASSWORD): str,
+            })
+        elif auth_type == AUTH_BEARER:
+            auth_schema = vol.Schema({
+                vol.Required(CONF_TOKEN): str,
+            })
+        else:
+            # Fallback - shouldn't happen
+            auth_schema = STEP_AUTH_DATA_SCHEMA
 
         return self.async_show_form(
-            step_id="user", data_schema=STEP_USER_DATA_SCHEMA, errors=errors
+            step_id="auth", 
+            data_schema=auth_schema, 
+            errors=errors,
+            description_placeholders={
+                "auth_type": auth_type.title(),
+                "base_url": self._base_config.get(CONF_BASE_URL, "")
+            }
         )
 
 

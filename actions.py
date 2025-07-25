@@ -9,6 +9,13 @@ from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import HomeAssistantError
 
 from .http_utils import create_http_session
+from .const import (
+    CONF_AUTH_TYPE, 
+    CONF_USERNAME, 
+    CONF_PASSWORD, 
+    CONF_TOKEN,
+    AUTH_NONE
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -21,13 +28,26 @@ class WoTActionHandler:
         self.hass = hass
         self._devices: Dict[str, Dict[str, Any]] = {}
 
-    def register_device(self, entry_id: str, base_url: str, thing_description: Dict[str, Any] | None) -> None:
+    def register_device(
+        self, 
+        entry_id: str, 
+        base_url: str, 
+        thing_description: Dict[str, Any] | None,
+        auth_type: str = AUTH_NONE,
+        username: str = None,
+        password: str = None,
+        token: str = None
+    ) -> None:
         """Register a device and its actions."""
         if not base_url.endswith('/'):
             base_url = base_url + '/'
         self._devices[entry_id] = {
             "base_url": base_url.rstrip('/'),
             "thing_description": thing_description,
+            "auth_type": auth_type,
+            "username": username,
+            "password": password,
+            "token": token,
         }
 
         if thing_description and "actions" in thing_description:
@@ -113,7 +133,14 @@ class WoTActionHandler:
                 request_data = call_data
 
         try:
-            async with create_http_session(self.hass, base_url) as session:
+            async with create_http_session(
+                self.hass, 
+                base_url, 
+                device.get("auth_type"),
+                device.get("username"),
+                device.get("password"),
+                device.get("token")
+            ) as session:
                 async with async_timeout.timeout(30):
                     if http_method == "GET":
                         async with session.get(action_url) as response:
